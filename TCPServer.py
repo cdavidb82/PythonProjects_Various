@@ -1,27 +1,58 @@
 import socket
-import socketserver
+import threading
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-ip = socket.gethostbyname(socket.gethostname())
-port = 1234
-address = (ip, port)
-server.listen(1)
+class Server:
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.bind((self.host, self.port))
+        self.server.listen(5)
+        self.clients = []
+        self.nicknames = []
 
-# no of connections = cno of clients that can connect to the server at one time
-print(f'Started listening on {ip}:{port}')
-client, addr = server.accept()
-print(f'Got a connection at {addr[0]}:{addr[1]}')
-while True:
-    data = client.recv(1024)
-    print(f'Received {data} from {client}')
-    print('processing data....\n')
-    if(data =='Hello Server'):
-        client.send('Hello client')
-        print('Processing is done...\n Reply sent')
-    elif(data=='disconnect'):
-        client.send('Goodbye')
-        client.close()
-        break
-    else:
-        client.send('Invalid data')
-        print("Processing done invalid data \n Reply sent")
+    def broadcast(self, message):
+        for client in self.clients:
+            client.send(message)
+
+    def handle(self, client):
+        while True:
+            try:
+                message = client.recv(1024)
+                self.broadcast(message)
+            except:
+                index = self.clients.index(client)
+                self.clients.remove(client)
+                client.close()
+                nickname = self.nicknames[index]
+                self.nicknames.remove(nickname)
+                self.broadcast(f'{nickname} left the chat!'.encode('ascii'))
+                break
+
+    def receive(self):
+        while True:
+            client, address = self.server.accept()
+            print(f"Connected with {str(address)}")
+
+            client.send('NICK'.encode('ascii'))
+            nickname = client.recv(1024).decode('ascii')
+            self.nicknames.append(nickname)
+            self.clients.append(client)
+
+            print(f'Nickname of the client is {nickname}!')
+            self.broadcast(f'{nickname} joined the chat!'.encode('ascii'))
+            client.send('Connected to the server!'.encode('ascii'))
+
+            thread = threading.Thread(target=self.handle, args=(client,))
+            thread.start()
+
+    def start(self):
+        print(f'Started listening on {self.host}:{self.port}')
+        print("Server Started!")
+        self.receive()
+
+if __name__ == "__main__":
+    ip = socket.gethostbyname(socket.gethostname())
+    port = 1234
+    server = Server(ip, port)
+    server.start()
