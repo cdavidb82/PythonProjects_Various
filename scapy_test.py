@@ -2,14 +2,16 @@ from scapy import all as s
 import PyInquirer
 import netifaces
 
+def get_interfaces():
+    return [{"name": k} for k in netifaces.interfaces()]
 
-def main():
-    questions = [
+def get_questions(interfaces):
+    return [
         dict(
             type="checkbox",
             name="interfaces",
             message="Interfaces? :",
-            choices=[{"name": k} for k in netifaces.interfaces()],
+            choices=interfaces,
         ),
         dict(
             type="input",
@@ -23,14 +25,25 @@ def main():
         ),
     ]
 
+def main():
+    interfaces = get_interfaces()
+    questions = get_questions(interfaces)
     answers = PyInquirer.prompt(questions)
-    results = s.sniff(iface=answers['interfaces'], timeout=int(answers['timeout']))
+    
+    if not answers['interfaces']:
+        print("Please select at least one interface.")
+        return
+    
+    try:
+        results = s.sniff(iface=answers['interfaces'], timeout=int(answers['timeout']))
+    except ValueError:
+        print("Invalid timeout value.")
+        return
 
     if answers["save"]:
         s.wrpcap("capture.pcap", results)
     else:
         results.nsummary()
-
 
 if __name__ == "__main__":
     main()
